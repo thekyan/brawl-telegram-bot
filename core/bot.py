@@ -20,6 +20,8 @@ from handlers.findall import findall
 from handlers.search import search
 # Import du handler /news
 from handlers.news import news
+# Import du handler /findmatch
+from handlers.matchmaking import find_match, setup_handlers as setup_matchmaking
 
 from handlers.admin import ban, broadcast, stats
 
@@ -34,6 +36,8 @@ def main():
     app.add_handler(CommandHandler("findall", findall))
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("news", news))
+    app.add_handler(CommandHandler("findmatch", find_match))
+    setup_matchmaking(app)
     app.add_handler(CommandHandler("start", start))
     setup_registration(app)  # Ajoute le ConversationHandler pour /register
     print("Bot démarré !")
