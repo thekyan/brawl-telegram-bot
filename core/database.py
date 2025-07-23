@@ -1,22 +1,12 @@
 from pymongo import MongoClient
-from pymongo.errors import PyMongoError
+from models.players import Player
+from models.match import Match
+from models.tournament import Tournament
 
-class MongoDB:
-    _instance = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.client = MongoClient(
-                os.getenv('MONGO_URI'),
-                serverSelectionTimeoutMS=5000,
-                maxPoolSize=50,
-                connect=False
-            )
-            cls._instance.db = cls._instance.client.get_database()
-        return cls._instance
+client = MongoClient(os.getenv("MONGO_URI"))
+db = client.brawl_stars_prod  # Ou brawl_stars_dev
 
-    def get_users_collection(self):
-        return self.db.users.create_index([('telegram_id', 1)], unique=True)
-    
-    
+# Initialisation
+players_model = Player(db)
+matches_model = Match(db)
+tournaments_model = Tournament(db)
