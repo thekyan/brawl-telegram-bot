@@ -14,7 +14,7 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # On récupère les 10 derniers matchs terminés
     matches = db.matches.find({"status": {"$in": ["ready", "finished"]}}).sort("created_at", -1).limit(10)
     found = False
-    async for match in matches:
+    for match in matches:
         found = True
         msg = (
             f"🎮 Match {match.get('mode', '')}\n"
