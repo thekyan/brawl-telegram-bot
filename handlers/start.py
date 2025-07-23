@@ -14,7 +14,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if player:
         msg = (
-            f"👋 Salut {player.get('username', user.first_name)} ! Ravi de te revoir sur le Brawl Stars Tournament Bot ! 🏆"
+            f"""👋 Salut {player.get('username', user.first_name)} ! Ravi de te revoir sur le Brawl Stars Tournament Bot ! 🏆
+        voici la liste des differentes commendes disponibles :
+        - /findmatch : Trouver un match
+        - /search : Rechercher un joueur
+        - /profile : Voir ton profil
+        - /findall : Voir tous les joueurs enregistrés
+        - /news : Voir les dernières nouvelles
+        nous vous souhaitons de passer un bon moment avec nous !
+        """
         )
         # Affiche la photo si elle existe
         if player.get("profile_photo"):

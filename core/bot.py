@@ -12,9 +12,28 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 from handlers.start import start
 # Import du setup pour le formulaire d'inscription
 from handlers.registration import setup as setup_registration
+# Import du handler /profile
+from handlers.profile import profile
+# Import du handler /findall
+from handlers.findall import findall
+# Import du handler /search
+from handlers.search import search
+# Import du handler /news
+from handlers.news import news
+
+from handlers.admin import ban, broadcast, stats
+
+
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("ban", ban))
+    app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CommandHandler("findall", findall))
+    app.add_handler(CommandHandler("search", search))
+    app.add_handler(CommandHandler("news", news))
     app.add_handler(CommandHandler("start", start))
     setup_registration(app)  # Ajoute le ConversationHandler pour /register
     print("Bot démarré !")
