@@ -186,22 +186,28 @@ async def handle_join_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=creator_id,
             text=f"✅ {joiner.full_name} (@{joiner.username or 'aucun pseudo'}) a rejoint votre match {mode} !"
         )
-        # Notifier le joueur qui rejoint avec le pseudo du créateur
+
+        # Récupère le lien de la gameroom
+        gameroom_link = match.get("gameroom_link", "Lien non disponible")
+
+        # Envoie au joueur qui rejoint un message "Good game!" avec le lien et le bouton fin de match
         await context.bot.send_message(
             chat_id=joiner.id,
-            text=f"✅ Tu as rejoint le match de {creator_username} en mode {mode} !"
+            text=f"🎮 Good game !\nVoici le lien de la Game Room :\n{gameroom_link}",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Fin de match", callback_data=f"endmatch_{str(match['_id'])}")]
+            ])
         )
-        await query.edit_message_text("🎮 Tu as rejoint le match !")
 
-        # Bouton "Fin de match" pour les deux joueurs
-        for pid in [creator_id, joiner.id]:
-            await context.bot.send_message(
-                chat_id=pid,
-                text="Quand le match est terminé, appuie sur le bouton ci-dessous.",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Fin de match", callback_data=f"endmatch_{str(match['_id'])}")]
-                ])
-            )
+        # Envoie aussi le bouton "Fin de match" au créateur
+        await context.bot.send_message(
+            chat_id=creator_id,
+            text="Quand le match est terminé, appuie sur le bouton ci-dessous.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Fin de match", callback_data=f"endmatch_{str(match['_id'])}")]
+            ])
+        )
+        # Ne pas éditer le message original contenant le lien
 
     except Exception as e:
         logger.error(f"Erreur handle_join_match: {e}", exc_info=True)
@@ -304,3 +310,4 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(handle_end_match, pattern="^endmatch_"))
     application.add_handler(CallbackQueryHandler(handle_match_result, pattern="^result_"))
     application.add_handler(MessageHandler(filters.PHOTO, handle_match_screenshot))
+    application.add_handler(CommandHandler("news", news))
