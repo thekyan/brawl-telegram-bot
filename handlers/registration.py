@@ -53,13 +53,13 @@ async def ask_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ask_trophies(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         trophies = int(update.message.text)
-        if trophies < 0 or trophies > 50000:
+        if trophies < 0 or trophies > 250000:
             raise ValueError
         context.user_data['trophies'] = trophies
         await update.message.reply_text("Quel est ton brawler principal ?")
         return ASK_BRAWLER
     except ValueError:
-        await update.message.reply_text("❌ Merci d'entrer un nombre de trophées valide (0 à 50000).")
+        await update.message.reply_text("❌ Merci d'entrer un nombre de trophées valide (0 à 250000).")
         return ASK_TROPHIES
 
 async def ask_brawler(update: Update, context: ContextTypes.DEFAULT_TYPE):

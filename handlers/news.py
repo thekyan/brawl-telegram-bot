@@ -10,8 +10,27 @@ client = MongoClient(os.getenv('MONGO_URI'))
 db = client[os.getenv("DB_NAME", "brawlbase")]
 
 async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les infos et captures des derniers matchs joués"""
-    # On récupère les 10 derniers matchs terminés
+    """Affiche les nouveaux inscrits et les infos/captures des derniers matchs joués"""
+
+    # 1. Afficher les 5 derniers inscrits
+    new_players = db.players.find().sort("registered_at", -1).limit(5)
+    await update.message.reply_text("🆕 Profils des nouveaux inscrits :")
+    for player in new_players:
+        msg = (
+            f"👤 Pseudo : {player.get('username', 'Inconnu')}\n"
+            f"• Trophées : {player.get('trophies', 'N/A')}\n"
+            f"• Brawler principal : {player.get('main_brawler', 'N/A')}\n"
+            f"• Inscrit le : {player.get('registered_at', datetime.utcnow()).strftime('%d/%m/%Y %H:%M')}\n"
+        )
+        if player.get("profile_photo"):
+            await update.message.reply_photo(
+                photo=player["profile_photo"],
+                caption=msg
+            )
+        else:
+            await update.message.reply_text(msg)
+
+    # 2. Afficher les 10 derniers matchs joués + captures
     matches = db.matches.find({"status": {"$in": ["ready", "finished"]}}).sort("created_at", -1).limit(10)
     found = False
     for match in matches:
