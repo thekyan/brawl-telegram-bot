@@ -25,6 +25,7 @@ from handlers.matchmaking import find_match, setup_handlers as setup_matchmaking
 
 from handlers.admin import ban, broadcast, stats
 
+from handlers.freindly import setup_freindly_handlers
 
 
 def main():
@@ -38,6 +39,7 @@ def main():
     app.add_handler(CommandHandler("news", news))
     app.add_handler(CommandHandler("findmatch", find_match))
     setup_matchmaking(app)
+    setup_freindly_handlers(app)
     app.add_handler(CommandHandler("start", start))
     setup_registration(app)  # Ajoute le ConversationHandler pour /register
     print("Bot démarré !")

@@ -21,6 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - /profile : Voir ton profil
         - /findall : Voir tous les joueurs enregistrés
         - /news : Voir les dernières nouvelles
+        - /freindly : Lancer une partie amicale
         nous vous souhaitons de passer un bon moment avec nous !
         """
         )

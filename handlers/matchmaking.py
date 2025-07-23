@@ -62,48 +62,76 @@ async def find_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Service indisponible. Réessayez plus tard.")
 
 async def handle_mode_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gère la sélection du mode"""
+    """Gère la sélection du mode et demande le lien de gameroom"""
     query = update.callback_query
     await query.answer()
-    
     try:
         user = query.from_user
-        mode = query.data.split("_")[1]  # "1v1", "2v2", etc.
+        mode = query.data.split("_")[1]
 
         player = db.players.find_one({"telegram_id": user.id})
         if not player:
             await query.edit_message_text("❌ Profil non trouvé")
             return
 
-        # Insertion atomique
+        # Création du match en base
         match_id = db.matches.insert_one({
             "telegram_id": user.id,
             "username": user.username,
             "mode": mode,
             "trophies": player["trophies"],
-            "status": "searching",
+            "status": "waiting_gameroom",
             "created_at": datetime.utcnow(),
             "expires_at": datetime.utcnow() + timedelta(minutes=5)
         }).inserted_id
 
-        # Notifier les autres joueurs avec un bouton "Rejoindre"
-        for other in db.players.find({"telegram_id": {"$ne": user.id}}):
-            try:
-                await context.bot.send_message(
-                    chat_id=other["telegram_id"],
-                    text=f"🔔 {user.username or 'Un joueur'} cherche un match en mode {mode} !",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Rejoindre", callback_data=f"join_{user.id}_{mode}")]
-                    ])
-                )
-            except Exception as e:
-                logger.warning(f"Impossible de notifier {other.get('username', other['telegram_id'])}: {e}")
-
-        await query.edit_message_text(f"🔍 Recherche {mode} en cours...")
+        # Demande au joueur de créer la gameroom et d'envoyer le lien
+        context.user_data["pending_gameroom"] = {
+            "match_id": str(match_id),
+            "mode": mode
+        }
+        await query.edit_message_text(
+            "🕹️ Merci de créer une salle amicale dans Brawl Stars, puis copie le lien d'invitation ici pour valider la recherche de match."
+        )
 
     except Exception as e:
         logger.error(f"Erreur handle_mode_selection: {e}", exc_info=True)
         await query.edit_message_text("❌ Échec de la recherche")
+
+async def handle_gameroom_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = update.message.text
+    pending = context.user_data.get("pending_gameroom")
+    if not pending:
+        return  # Ignore si pas d'attente de lien
+
+    if not text.startswith("https://"):
+        await update.message.reply_text("Merci de coller un lien d'invitation valide (commençant par https://).")
+        return
+
+    # Met à jour le match avec le lien de gameroom
+    db.matches.update_one(
+        {"_id": ObjectId(pending["match_id"])},
+        {"$set": {"gameroom_link": text, "status": "searching"}}
+    )
+
+    await update.message.reply_text("✅ Lien de la salle enregistré ! Les autres joueurs vont pouvoir rejoindre.")
+
+    # Notifie les autres joueurs avec le lien et bouton rejoindre
+    for other in db.players.find({"telegram_id": {"$ne": user.id}}):
+        try:
+            await context.bot.send_message(
+                chat_id=other["telegram_id"],
+                text=f"🔔 {user.username or 'Un joueur'} cherche un match {pending['mode']} !\n"
+                     f"Rejoins la salle amicale avec ce lien :\n{text}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Rejoindre", callback_data=f"join_{user.id}_{pending['mode']}")]
+                ])
+            )
+        except Exception:
+            continue
+
+    context.user_data.pop("pending_gameroom", None)
 
 async def handle_join_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère le clic sur le bouton 'Rejoindre'"""
@@ -121,7 +149,7 @@ async def handle_join_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Ce match n'est plus disponible.")
             return
 
-        # Mettre à jour le match (exemple pour 1v1)
+        # Mettre à jour le match
         db.matches.update_one(
             {"_id": match["_id"]},
             {"$set": {"status": "ready", "opponent_id": joiner.id, "opponent_username": joiner.username}}
@@ -243,6 +271,7 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def setup_handlers(application):
     application.add_handler(CommandHandler("findmatch", find_match))
     application.add_handler(CallbackQueryHandler(handle_mode_selection, pattern="^mode_"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_gameroom_link))
     application.add_handler(CallbackQueryHandler(handle_join_match, pattern="^join_"))
     application.add_handler(CallbackQueryHandler(handle_end_match, pattern="^endmatch_"))
     application.add_handler(CallbackQueryHandler(handle_match_result, pattern="^result_"))
