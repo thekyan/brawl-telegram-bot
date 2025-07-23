@@ -155,14 +155,19 @@ async def handle_join_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
             {"$set": {"status": "ready", "opponent_id": joiner.id, "opponent_username": joiner.username}}
         )
 
-        # Notifier les deux joueurs avec le pseudo complet de celui qui rejoint
+        # Récupère le créateur du match pour afficher son pseudo
+        creator = db.players.find_one({"telegram_id": creator_id})
+        creator_username = creator.get("username", "un joueur") if creator else "un joueur"
+
+        # Notifier le créateur
         await context.bot.send_message(
             chat_id=creator_id,
             text=f"✅ {joiner.full_name} (@{joiner.username or 'aucun pseudo'}) a rejoint votre match {mode} !"
         )
+        # Notifier le joueur qui rejoint avec le pseudo du créateur
         await context.bot.send_message(
             chat_id=joiner.id,
-            text=f"✅ Tu as rejoint le match de {match.get('username', 'un joueur')} en mode {mode} !"
+            text=f"✅ Tu as rejoint le match de {creator_username} en mode {mode} !"
         )
         await query.edit_message_text("🎮 Tu as rejoint le match !")
 
