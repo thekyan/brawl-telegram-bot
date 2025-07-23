@@ -35,7 +35,7 @@ async def find_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère la commande /findmatch"""
     try:
         user = update.effective_user
-        
+
         if not db.players.find_one({"telegram_id": user.id}):
             await update.message.reply_text("⚠️ Utilisez /register avant de chercher un match")
             return
@@ -44,11 +44,21 @@ async def find_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "telegram_id": user.id,
             "status": "searching"
         }) > 0:
-            await update.message.reply_text("🔍 Vous avez déjà une recherche en cours")
+            # Ajoute les boutons pour supprimer ou annuler la recherche
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Oui, supprimer", callback_data="cancel_search_yes"),
+                    InlineKeyboardButton("❌ Non, annuler", callback_data="cancel_search_no")
+                ]
+            ])
+            await update.message.reply_text(
+                "🔍 Vous avez déjà une recherche en cours.\nVoulez-vous supprimer cette recherche de match ?",
+                reply_markup=keyboard
+            )
             return
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(mode, callback_data=f"mode_{mode}")] 
+            [InlineKeyboardButton(mode, callback_data=f"mode_{mode}")]
             for mode in ["1v1", "2v2", "3v3"]
         ])
 
@@ -60,6 +70,18 @@ async def find_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Erreur find_match: {e}", exc_info=True)
         await update.message.reply_text("❌ Service indisponible. Réessayez plus tard.")
+
+async def handle_cancel_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    if query.data == "cancel_search_yes":
+        # Supprime la recherche de match en cours
+        db.matches.delete_many({"telegram_id": user.id, "status": "searching"})
+        await query.edit_message_text("✅ Votre recherche de match a été supprimée.")
+    else:
+        await query.edit_message_text("❌ Recherche de match conservée.")
 
 async def handle_mode_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère la sélection du mode et demande le lien de gameroom"""
@@ -275,10 +297,10 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def setup_handlers(application):
     application.add_handler(CommandHandler("findmatch", find_match))
+    application.add_handler(CallbackQueryHandler(handle_cancel_search, pattern="^cancel_search_"))
     application.add_handler(CallbackQueryHandler(handle_mode_selection, pattern="^mode_"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_gameroom_link))
     application.add_handler(CallbackQueryHandler(handle_join_match, pattern="^join_"))
     application.add_handler(CallbackQueryHandler(handle_end_match, pattern="^endmatch_"))
     application.add_handler(CallbackQueryHandler(handle_match_result, pattern="^result_"))
     application.add_handler(MessageHandler(filters.PHOTO, handle_match_screenshot))
-    application.add_handler(CommandHandler("news", news))
