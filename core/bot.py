@@ -37,7 +37,6 @@ def main():
     app.add_handler(CommandHandler("findall", findall))
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("news", news))
-    app.add_handler(CommandHandler("findmatch", find_match))
     setup_matchmaking(app)
     setup_freindly_handlers(app)
     app.add_handler(CommandHandler("start", start))

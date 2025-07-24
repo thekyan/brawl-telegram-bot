@@ -1,7 +1,10 @@
 import os
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    ContextTypes, CallbackQueryHandler, CommandHandler, MessageHandler,
+    filters, ConversationHandler
+)
 from datetime import datetime
 import logging
 from pymongo import MongoClient
@@ -27,6 +30,11 @@ except Exception as e:
 
 MAX_PLAYERS = 5  # 1 créateur + 4 amis max
 
+# États pour le ConversationHandler
+WAITING_FRIENDS = 2001
+WAITING_VOICE_LINK = 2002
+WAITING_BRAWL_LINK = 2003
+
 async def freindly(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Propose deux choix pour lancer une partie amicale"""
     keyboard = InlineKeyboardMarkup([
@@ -37,6 +45,7 @@ async def freindly(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Comment veux-tu inviter les joueurs ?",
         reply_markup=keyboard
     )
+    return ConversationHandler.END  # La suite est gérée par les callbacks
 
 async def handle_manual_invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -45,16 +54,17 @@ async def handle_manual_invite(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(
         f"Envoie les pseudos Telegram de tes amis à inviter (jusqu'à {MAX_PLAYERS-1}, séparés par des espaces ou des virgules) :"
     )
+    return WAITING_FRIENDS
 
 async def handle_freindly_invites(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if context.user_data.get("freindly_mode") != "manual":
-        return
+        return ConversationHandler.END
 
     pseudos = [p.strip().lstrip("@") for p in update.message.text.replace(",", " ").split()]
     if not (1 <= len(pseudos) <= MAX_PLAYERS-1):
         await update.message.reply_text(f"Merci d'envoyer entre 1 et {MAX_PLAYERS-1} pseudo(s).")
-        return
+        return WAITING_FRIENDS
 
     invited = []
     for pseudo in pseudos:
@@ -63,7 +73,7 @@ async def handle_freindly_invites(update: Update, context: ContextTypes.DEFAULT_
             invited.append(player["telegram_id"])
         else:
             await update.message.reply_text(f"❌ Joueur '{pseudo}' introuvable.")
-            return
+            return WAITING_FRIENDS
 
     match_id = db.freindly_matches.insert_one({
         "creator_id": user.id,
@@ -87,6 +97,7 @@ async def handle_freindly_invites(update: Update, context: ContextTypes.DEFAULT_
             continue
 
     await update.message.reply_text("Invitations envoyées à tes amis. Ils doivent accepter pour rejoindre la Game Room.")
+    return ConversationHandler.END
 
 async def handle_invite_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -117,6 +128,7 @@ async def handle_invite_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
 
     await query.edit_message_text("Invitation envoyée à tout le monde ! Les premiers à accepter rejoindront la Game Room.")
+    return ConversationHandler.END
 
 async def handle_freindly_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -156,6 +168,7 @@ async def handle_freindly_join(update: Update, context: ContextTypes.DEFAULT_TYP
             {"_id": ObjectId(match_id)},
             {"$set": {"status": "waiting_voice"}}
         )
+        return WAITING_VOICE_LINK
     else:
         await context.bot.send_message(
             chat_id=match["creator_id"],
@@ -168,7 +181,7 @@ async def handle_voice_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     match = db.freindly_matches.find_one({"creator_id": user.id, "status": "waiting_voice"})
     if not match:
-        return
+        return ConversationHandler.END
 
     db.freindly_matches.update_one(
         {"_id": match["_id"]},
@@ -193,13 +206,14 @@ async def handle_voice_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"_id": match["_id"]},
         {"$set": {"status": "waiting_brawl_link"}}
     )
+    return WAITING_BRAWL_LINK
 
 async def handle_brawl_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
     match = db.freindly_matches.find_one({"creator_id": user.id, "status": "waiting_brawl_link"})
     if not match:
-        return
+        return ConversationHandler.END
 
     db.freindly_matches.update_one(
         {"_id": match["_id"]},
@@ -215,12 +229,20 @@ async def handle_brawl_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception:
             continue
+    return ConversationHandler.END
 
 def setup_freindly_handlers(application):
-    application.add_handler(CommandHandler("freindly", freindly))
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("freindly", freindly)],
+        states={
+            WAITING_FRIENDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_freindly_invites)],
+            WAITING_VOICE_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_voice_link)],
+            WAITING_BRAWL_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_brawl_link)],
+        },
+        fallbacks=[],
+        allow_reentry=True,
+    )
+    application.add_handler(conv_handler)
     application.add_handler(CallbackQueryHandler(handle_manual_invite, pattern="^freindly_manual$"))
     application.add_handler(CallbackQueryHandler(handle_invite_all, pattern="^freindly_all$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_freindly_invites))
     application.add_handler(CallbackQueryHandler(handle_freindly_join, pattern="^freindly_join_"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_voice_link))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_brawl_link))
