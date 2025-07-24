@@ -65,7 +65,7 @@ async def ask_trophies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ask_brawler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     main_brawler = update.message.text.strip()
     context.user_data['main_brawler'] = main_brawler
-    await update.message.reply_text("Envoie la photo de ton profil Brawl Stars (ou tape /skip pour passer).")
+    await update.message.reply_text("Envoie la photo de ton profil Brawl Stars.")
     return ASK_PHOTO
 
 async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
