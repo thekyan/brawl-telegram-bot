@@ -1,30 +1,45 @@
-from telegram import Update
-from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
-from datetime import datetime
-from pymongo import MongoClient
 import os
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import (
+    ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+)
+from datetime import datetime
 import cloudinary
 import cloudinary.uploader
+from pymongo import MongoClient
+import logging
 
-cloudinary.config(
-    cloudinary_url=os.getenv("CLOUDINARY_URL")
+ASK_USERNAME, ASK_TROPHIES, ASK_BRAWLER, ASK_COUNTRY, ASK_PHONE, ASK_PHOTO = range(6)
+
+load_dotenv()
+cloudinary.config(cloudinary_url=os.getenv("CLOUDINARY_URL"))
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("DB_NAME", "brawlbase")
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
-client = MongoClient(os.getenv('MONGO_URI'))
-db = client.brawlbase
+logger = logging.getLogger(__name__)
 
-# États de la conversation
-ASK_USERNAME, ASK_TROPHIES, ASK_BRAWLER, ASK_PHOTO = range(4)
+try:
+    client = MongoClient(MONGO_URI)
+    db = client[DB_NAME]
+    db.command('ping')
+except Exception as e:
+    logger.critical(f"Échec de connexion à MongoDB: {e}")
+    raise
 
 async def start_register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     player = db.players.find_one({'telegram_id': user.id})
     if player:
         await update.message.reply_text(
-            f"✅ Tu es déjà inscrit sous le pseudo : {player.get('username', 'inconnu')}.\n"
-            "Si tu veux modifier ton profil, utilise /modify."
+            f"✅ Tu es déjà inscrit sous le pseudo : {player.get('username', 'inconnu')}\n"
+            f"Utilise /modify pour modifier ton profil."
         )
         return ConversationHandler.END
-
     await update.message.reply_text("Quel est ton pseudo Brawl Stars ?")
     return ASK_USERNAME
 
@@ -37,6 +52,12 @@ async def start_modify(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
+    context.user_data['username'] = player.get('username', '')
+    context.user_data['trophies'] = player.get('trophies', 0)
+    context.user_data['main_brawler'] = player.get('main_brawler', '')
+    context.user_data['country'] = player.get('country', '')
+    context.user_data['phone'] = player.get('phone', '')
+
     await update.message.reply_text(
         f"🔄 Modification de ton profil.\n"
         f"Ton pseudo actuel est : {player.get('username', 'inconnu')}.\n"
@@ -46,6 +67,9 @@ async def start_modify(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.message.text.strip()
+    if not username:
+        await update.message.reply_text("❌ Merci d'entrer un pseudo valide.")
+        return ASK_USERNAME
     context.user_data['username'] = username
     await update.message.reply_text("Combien as-tu de trophées ?")
     return ASK_TROPHIES
@@ -64,8 +88,29 @@ async def ask_trophies(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ask_brawler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     main_brawler = update.message.text.strip()
+    if not main_brawler:
+        await update.message.reply_text("❌ Merci d'entrer un nom de brawler valide.")
+        return ASK_BRAWLER
     context.user_data['main_brawler'] = main_brawler
-    await update.message.reply_text("Envoie la photo de ton profil Brawl Stars.")
+    await update.message.reply_text("Dans quel pays habites-tu ?")
+    return ASK_COUNTRY
+
+async def ask_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    country = update.message.text.strip()
+    if not country:
+        await update.message.reply_text("❌ Merci d'entrer un pays valide.")
+        return ASK_COUNTRY
+    context.user_data['country'] = country
+    await update.message.reply_text("Quel est ton numéro de téléphone ? (ex: +33612345678)")
+    return ASK_PHONE
+
+async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    phone = update.message.text.strip()
+    if not phone:
+        await update.message.reply_text("❌ Merci d'entrer un numéro de téléphone valide.")
+        return ASK_PHONE
+    context.user_data['phone'] = phone
+    await update.message.reply_text("Envoie la photo de ton profil Brawl Stars (ou tape /skip pour passer).")
     return ASK_PHOTO
 
 async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -73,13 +118,14 @@ async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     trophies = context.user_data['trophies']
     username = context.user_data['username']
     main_brawler = context.user_data['main_brawler']
+    country = context.user_data.get('country', '')
+    phone = context.user_data.get('phone', '')
 
     photo_url = None
 
     if update.message.photo:
         photo_file = await update.message.photo[-1].get_file()
         photo_bytes = await photo_file.download_as_bytearray()
-        # Upload sur Cloudinary
         result = cloudinary.uploader.upload(photo_bytes, folder="brawlstars_profiles")
         photo_url = result.get("secure_url")
 
@@ -88,6 +134,8 @@ async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "username": username,
         "trophies": trophies,
         "main_brawler": main_brawler,
+        "country": country,
+        "phone": phone,
         "profile_photo": photo_url,
         "registered_at": datetime.utcnow(),
         "last_active": datetime.utcnow(),
@@ -106,18 +154,15 @@ async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• Pseudo : {username}\n"
         f"• Trophées: {trophies}\n"
         f"• Brawler principal: {main_brawler}\n"
+        f"• Pays : {country}\n"
+        f"• Téléphone : {phone}\n"
         f"{'• Photo enregistrée !' if photo_url else '• Pas de photo.'}\n"
-        f"Utilise /findmatch pour commencer !"
+        f"Utilise /start pour commencer !"
     )
     return ConversationHandler.END
 
 async def skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Si l'utilisateur ne veut pas mettre de photo
     return await ask_photo(update, context)
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Inscription/modification annulée.")
-    return ConversationHandler.END
 
 def setup(application):
     conv_handler = ConversationHandler(
@@ -129,11 +174,14 @@ def setup(application):
             ASK_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_username)],
             ASK_TROPHIES: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_trophies)],
             ASK_BRAWLER: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_brawler)],
+            ASK_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_country)],
+            ASK_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_phone)],
             ASK_PHOTO: [
                 MessageHandler(filters.PHOTO, ask_photo),
                 CommandHandler("skip", skip_photo)
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[],
+        allow_reentry=True,
     )
     application.add_handler(conv_handler)

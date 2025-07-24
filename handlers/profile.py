@@ -14,14 +14,23 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     player = db.players.find_one({"telegram_id": user.id})
 
     if not player:
-        await update.message.reply_text("❌ Tu n'es pas encore inscrit. Utilise /register pour créer ton profil.")
+        await update.message.reply_text(" Tu n'es pas encore inscrit. Utilise /register pour créer ton profil.")
         return
+
+    # Récupère la team si elle existe
+    team_name = None
+    if player.get("team_id"):
+        team = db.teams.find_one({"_id": player["team_id"]})
+        if team:
+            team_name = team.get("name")
 
     msg = (
         f"👤 **Ton profil Brawl Stars**\n"
         f"• Pseudo : {player.get('username', 'Inconnu')}\n"
         f"• Trophées : {player.get('trophies', 'N/A')}\n"
         f"• Brawler principal : {player.get('main_brawler', 'N/A')}\n"
+        f"• Pays : {player.get('country', 'N/A')}\n"
+        f"• Team : {team_name if team_name else 'Aucune'}\n"
         f"• Victoires : {player.get('wins', 0)}\n"
         f"• Défaites : {player.get('defeats', 0)}\n"
         f"• Matchs joués : {player.get('matches_played', 0)}\n"

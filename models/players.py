@@ -18,6 +18,7 @@ class Player:
         :param db: Instance pymongo.Database
         """
         self.collection = db[self.COLLECTION_NAME]
+        self.teams_collection = db["teams"]
         self._create_indexes()
     
     def _create_indexes(self) -> None:
@@ -27,7 +28,8 @@ class Player:
                 IndexModel([("telegram_id", 1)], unique=True, name="telegram_id_unique"),
                 IndexModel([("trophies", DESCENDING)], name="trophies_desc"),
                 IndexModel([("last_active", DESCENDING)], name="last_active_desc"),
-                IndexModel([("username", "text")], name="username_text_search")
+                IndexModel([("username", "text")], name="username_text_search"),
+                IndexModel([("team_id", 1)], name="team_id_index")
             ]
             self.collection.create_indexes(indexes)
         except Exception as e:
@@ -73,6 +75,10 @@ class Player:
                 "default": 0.0,
                 "min": 0.0,
                 "max": 1.0
+            },
+            "team_id": {
+                "type": ObjectId,
+                "default": None
             },
             "last_active": {"type": datetime, "default": datetime.utcnow},
             "created_at": {"type": datetime, "default": datetime.utcnow}
@@ -135,3 +141,41 @@ class Player:
         except Exception as e:
             logger.error(f"Erreur récupération classement: {e}")
             return []
+
+    # --- Gestion des teams ---
+
+    def set_team(self, telegram_id: int, team_id: ObjectId) -> bool:
+        """
+        Associe un joueur à une team (ou None pour retirer)
+        :param telegram_id: ID Telegram du joueur
+        :param team_id: ObjectId de la team ou None
+        :return: True si modifié
+        """
+        try:
+            result = self.collection.update_one(
+                {"telegram_id": telegram_id},
+                {"$set": {"team_id": team_id}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Erreur set_team {telegram_id}: {e}")
+            return False
+
+    def get_team(self, telegram_id: int) -> Optional[Dict]:
+        """
+        Récupère la team du joueur (ou None)
+        :param telegram_id: ID Telegram du joueur
+        :return: Dictionnaire team ou None
+        """
+        player = self.collection.find_one({"telegram_id": telegram_id})
+        if player and player.get("team_id"):
+            return self.teams_collection.find_one({"_id": player["team_id"]})
+        return None
+
+    def remove_from_team(self, telegram_id: int) -> bool:
+        """
+        Retire le joueur de sa team
+        :param telegram_id: ID Telegram du joueur
+        :return: True si modifié
+        """
+        return self.set_team(telegram_id, None)
