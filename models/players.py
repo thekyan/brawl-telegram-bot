@@ -57,19 +57,21 @@ class Player:
                 "min": 0,
                 "max": self.MAX_TROPHIES
             },
-            "brawlers": {
-                "type": list,
-                "default": [],
-                "schema": {
-                    "type": dict,
-                    "schema": {
-                        "name": {"type": str, "required": True},
-                        "power_level": {"type": int, "min": 1, "max": 11},
-                        "last_used": {"type": datetime}
-                    }
-                }
+            "main_brawler": {
+                "type": str,
+                "default": ""
+            },
+            "country": {
+                "type": str,
+                "default": ""
+            },
+            "phone": {
+                "type": str,
+                "default": ""
             },
             "matches_played": {"type": int, "default": 0, "min": 0},
+            "wins": {"type": int, "default": 0, "min": 0},
+            "defeats": {"type": int, "default": 0, "min": 0},
             "win_rate": {
                 "type": float,
                 "default": 0.0,
@@ -81,6 +83,7 @@ class Player:
                 "default": None
             },
             "last_active": {"type": datetime, "default": datetime.utcnow},
+            "registered_at": {"type": datetime, "default": datetime.utcnow},
             "created_at": {"type": datetime, "default": datetime.utcnow}
         }
 

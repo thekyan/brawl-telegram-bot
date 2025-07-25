@@ -8,9 +8,9 @@ DB_NAME = os.getenv("DB_NAME", "brawlbase")
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 
-def create_team(name, creator_id, player_ids=None):
+def create_team(name, creator_id, player_ids=None, country=None):
     """
-    Crée une équipe avec un nom, un créateur et une liste d'IDs de joueurs (optionnel).
+    Crée une équipe avec un nom, un créateur, une liste d'IDs de joueurs (optionnel) et un pays.
     Vérifie qu'aucun joueur n'est déjà dans une autre équipe.
     """
     if player_ids is None:
@@ -24,7 +24,8 @@ def create_team(name, creator_id, player_ids=None):
     team = {
         "name": name,
         "creator_id": creator_id,
-        "player_ids": [ObjectId(pid) for pid in player_ids]
+        "player_ids": [ObjectId(pid) for pid in player_ids],
+        "country": country  # Ajout du pays
     }
     team_id = db.teams.insert_one(team).inserted_id
 

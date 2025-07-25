@@ -21,7 +21,10 @@ async def profileteam(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     members = db.players.find({"telegram_id": {"$in": team["member_ids"]}})
-    member_list = "\n".join([f"- {m.get('username', str(m['telegram_id']))}" for m in members])
+    member_list = "\n".join([
+        f"- {m.get('username', str(m['telegram_id']))} ({m.get('trophies', 0)} trophées)"
+        for m in members
+    ])
 
     msg = (
         f"🏆 **Profil de ta team**\n"
@@ -55,7 +58,10 @@ async def searchteam(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Aucune team trouvée avec ce nom.")
         return
     members = db.players.find({"telegram_id": {"$in": team["member_ids"]}})
-    member_list = "\n".join([f"- {m.get('username', str(m['telegram_id']))}" for m in members])
+    member_list = "\n".join([
+        f"- {m.get('username', str(m['telegram_id']))} ({m.get('trophies', 0)} trophées)"
+        for m in members
+    ])
     msg = (
         f"🔎 **Résultat de la recherche :**\n"
         f"• Nom : {team.get('name', 'Inconnu')}\n"

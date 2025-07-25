@@ -10,7 +10,7 @@ import cloudinary.uploader
 from pymongo import MongoClient
 import logging
 
-ASK_USERNAME, ASK_TROPHIES, ASK_BRAWLER, ASK_COUNTRY, ASK_PHONE, ASK_PHOTO = range(6)
+ASK_USERNAME, ASK_TROPHIES, ASK_BRAWLER, ASK_COUNTRY, ASK_PHONE, ASK_PHOTO, ASK_UPDATE_TROPHIES = range(7)
 
 load_dotenv()
 cloudinary.config(cloudinary_url=os.getenv("CLOUDINARY_URL"))
@@ -110,7 +110,7 @@ async def ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Merci d'entrer un numéro de téléphone valide.")
         return ASK_PHONE
     context.user_data['phone'] = phone
-    await update.message.reply_text("Envoie la photo de ton profil Brawl Stars (ou tape /skip pour passer).")
+    await update.message.reply_text("Envoie la photo de ton profil Brawl Stars .")
     return ASK_PHOTO
 
 async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -164,11 +164,34 @@ async def ask_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await ask_photo(update, context)
 
+# ----------- /updatetrophies -----------
+
+async def start_update_trophies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Combien as-tu de trophées actuellement ?")
+    return ASK_UPDATE_TROPHIES
+
+async def update_trophies_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        trophies = int(update.message.text)
+        if trophies < 0 or trophies > 250000:
+            raise ValueError
+        user = update.effective_user
+        db.players.update_one(
+            {"telegram_id": user.id},
+            {"$set": {"trophies": trophies, "last_active": datetime.utcnow()}}
+        )
+        await update.message.reply_text(f"✅ Tes trophées ont été mis à jour à {trophies} !")
+        return ConversationHandler.END
+    except ValueError:
+        await update.message.reply_text("❌ Merci d'entrer un nombre de trophées valide (0 à 250000).")
+        return ASK_UPDATE_TROPHIES
+
 def setup(application):
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("register", start_register),
-            CommandHandler("modify", start_modify)
+            CommandHandler("modify", start_modify),
+            CommandHandler("updatetrophies", start_update_trophies)
         ],
         states={
             ASK_USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_username)],
@@ -180,6 +203,7 @@ def setup(application):
                 MessageHandler(filters.PHOTO, ask_photo),
                 CommandHandler("skip", skip_photo)
             ],
+            ASK_UPDATE_TROPHIES: [MessageHandler(filters.TEXT & ~filters.COMMAND, update_trophies_value)],
         },
         fallbacks=[],
         allow_reentry=True,

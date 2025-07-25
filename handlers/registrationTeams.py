@@ -10,7 +10,7 @@ import cloudinary
 import cloudinary.uploader
 import logging
 
-ASK_TEAM_NAME, ASK_MEMBER_PSEUDO, WAIT_MEMBER_ACTION, ASK_TEAM_LOGO = range(4)
+ASK_TEAM_NAME, ASK_TEAM_COUNTRY, ASK_MEMBER_PSEUDO, WAIT_MEMBER_ACTION, ASK_TEAM_LOGO = range(5)
 
 load_dotenv()
 cloudinary.config(cloudinary_url=os.getenv("CLOUDINARY_URL"))
@@ -37,9 +37,21 @@ MAX_MEMBERS = 5  # Par exemple
 
 async def start_team_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    context.user_data["members"] = []
+    user = update.effective_user
+    player = db.players.find_one({"telegram_id": user.id})
+    if not player:
+        await update.message.reply_text("❌ Tu dois avoir un profil joueur pour créer une team (/register).")
+        return ConversationHandler.END
+
+    context.user_data["members"] = [{
+        "telegram_id": player["telegram_id"],
+        "username": player["username"]
+    }]
+    context.user_data["creator_id"] = player["telegram_id"]
     context.user_data["mode"] = "create"
-    await update.message.reply_text("Quel est le nom de votre team ?")
+    await update.message.reply_text(
+        f"Tu seras le créateur et premier membre de la team.\nQuel est le nom de votre team ?"
+    )
     return ASK_TEAM_NAME
 
 # ----------- Modification d'une team -----------
@@ -55,6 +67,7 @@ async def start_team_modify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["team_id"] = str(team["_id"])
     context.user_data["members"] = [{"telegram_id": tid, "username": db.players.find_one({"telegram_id": tid}).get("username", str(tid))} for tid in team["member_ids"]]
     context.user_data["team_name"] = team["name"]
+    context.user_data["team_country"] = team.get("country", "")
     context.user_data["mode"] = "modify"
 
     await update.message.reply_text(
@@ -71,8 +84,21 @@ async def ask_team_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Merci d'entrer un nom de team valide.")
         return ASK_TEAM_NAME
     context.user_data["team_name"] = team_name
-    context.user_data["members"] = []
-    await update.message.reply_text("Envoie le pseudo du premier membre de la team :")
+    await update.message.reply_text("Dans quel pays est basée votre team ?")
+    return ASK_TEAM_COUNTRY
+
+# ----------- Pays de la team -----------
+
+async def ask_team_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    country = update.message.text.strip()
+    if not country:
+        await update.message.reply_text("❌ Merci d'entrer un pays valide.")
+        return ASK_TEAM_COUNTRY
+    context.user_data["team_country"] = country
+    # Si création, on garde le créateur comme premier membre, sinon on vide la liste pour la modification
+    if context.user_data.get("mode") == "modify":
+        context.user_data["members"] = []
+    await update.message.reply_text("Envoie le pseudo du premier membre de la team :\n(Tu peux remettre ton pseudo si tu veux rester dans la team)")
     return ASK_MEMBER_PSEUDO
 
 # ----------- Ajout de membres -----------
@@ -149,13 +175,14 @@ async def ask_team_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logo_url = result.get("secure_url")
 
     team_name = context.user_data["team_name"]
+    team_country = context.user_data.get("team_country", "")
     member_ids = [m["telegram_id"] for m in context.user_data["members"]]
 
     if context.user_data.get("mode") == "modify":
         team_id = ObjectId(context.user_data["team_id"])
         db.teams.update_one(
             {"_id": team_id},
-            {"$set": {"name": team_name, "member_ids": member_ids, "logo_url": logo_url}}
+            {"$set": {"name": team_name, "country": team_country, "member_ids": member_ids, "logo_url": logo_url}}
         )
         # Mets à jour les joueurs (enlève l'ancien team_id pour ceux qui ne sont plus dans la team)
         db.players.update_many(
@@ -168,14 +195,17 @@ async def ask_team_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(
             f"✅ Team '{team_name}' modifiée avec succès !\n"
+            f"Pays : {team_country}\n"
             f"Membres : {', '.join([m['username'] for m in context.user_data['members']])}\n"
             f"Logo mis à jour."
         )
     else:
         team = {
             "name": team_name,
+            "country": team_country,
             "member_ids": member_ids,
-            "logo_url": logo_url
+            "logo_url": logo_url,
+            "creator_id": context.user_data["creator_id"]
         }
         team_id = db.teams.insert_one(team).inserted_id
         db.players.update_many(
@@ -184,6 +214,7 @@ async def ask_team_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(
             f"🎉 Team '{team_name}' enregistrée avec succès !\n"
+            f"Pays : {team_country}\n"
             f"Membres : {', '.join([m['username'] for m in context.user_data['members']])}\n"
             f"Logo enregistré."
         )
@@ -197,6 +228,7 @@ def setup_team_registration(application):
         ],
         states={
             ASK_TEAM_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_team_name)],
+            ASK_TEAM_COUNTRY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_team_country)],
             ASK_MEMBER_PSEUDO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_member_pseudo)],
             WAIT_MEMBER_ACTION: [CallbackQueryHandler(wait_member_action, pattern="^(add_member|team_complete)$")],
             ASK_TEAM_LOGO: [MessageHandler(filters.PHOTO, ask_team_logo)],
