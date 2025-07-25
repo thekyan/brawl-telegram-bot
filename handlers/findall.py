@@ -14,7 +14,6 @@ async def findall(update: Update, context: ContextTypes.DEFAULT_TYPE):
     found = False
     for player in players:
         found = True
-        # Récupère la team si elle existe
         team_name = None
         if player.get("team_id"):
             team = db.teams.find_one({"_id": player["team_id"]})
@@ -31,6 +30,9 @@ async def findall(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Matchs joués : {player.get('matches_played', 0)}\n"
             f"• Inscrit le : {player.get('registered_at', datetime.utcnow()).strftime('%d/%m/%Y %H:%M')}\n"
         )
-        await update.message.reply_text(msg)
+        if player.get("profile_photo"):
+            await update.message.reply_photo(photo=player["profile_photo"], caption=msg)
+        else:
+            await update.message.reply_text(msg)
     if not found:
         await update.message.reply_text("Aucun joueur inscrit pour le moment.")
