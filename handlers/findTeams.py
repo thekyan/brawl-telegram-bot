@@ -65,6 +65,7 @@ async def searchteam(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         f"🔎 **Résultat de la recherche :**\n"
         f"• Nom : {team.get('name', 'Inconnu')}\n"
+        f"• Pays : {team.get('country', 'N/A')}\n"
         f"• Membres :\n{member_list}\n"
     )
     if team.get("logo_url"):
