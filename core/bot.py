@@ -30,6 +30,7 @@ from handlers.freindly import setup_freindly_handlers
 from handlers.findTeams import setup_team_finders
 from handlers.registrationTeams import setup_team_registration
 from handlers.tournaments import setup_tournament_handlers
+from handlers.scrim import setup_scrim 
 
 
 def main():
@@ -41,6 +42,7 @@ def main():
     app.add_handler(CommandHandler("findall", findall))
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("news", news))
+    setup_scrim(app)
     setup_team_finders(app)
     setup_team_registration(app)
     setup_tournament_handlers(app)

@@ -17,11 +17,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     f"""👋 Salut {player.get('username', user.first_name)} ! Ravi de te revoir sur le Brawl Stars Tournament Bot ! 🏆
 
         Voici la liste des différentes commandes disponibles :
+        - /register : Créer ton profil
         - /registerteam : Créer une team
         - /modifyteam : Modifier ta team
         - /profileteam : Voir le profil de ta team
         - /findallteam : Voir toutes les teams
         - /searchteam <nom> : Rechercher une team
+        - /scrim : Lancer un scrim
         - /findmatch : Trouver un match
         - /search : Rechercher un joueur
         - /profile : Voir ton profil
