@@ -1,3 +1,14 @@
+import os
+from pymongo import MongoClient
+from telegram import Update
+from telegram.ext import ContextTypes
+from dotenv import load_dotenv
+from datetime import datetime
+
+load_dotenv()
+client = MongoClient(os.getenv('MONGO_URI'))
+db = client[os.getenv("DB_NAME", "brawlbase")]
+
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Utilisation : /search <pseudo>")
